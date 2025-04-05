@@ -18,13 +18,17 @@ type PromptResponse struct {
 	Response string `json:"response"`
 }
 
-// DeepSeekRequest структура для запроса к DeepSeek API
-type DeepSeekRequest struct {
-	Model  string `json:"model"`
-	Prompt string `json:"prompt"`
+// Структуры для DeepSeek API
+type DeepSeekMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
 }
 
-// DeepSeekResponse структура для ответа от DeepSeek API
+type DeepSeekRequest struct {
+	Model    string            `json:"model"`
+	Messages []DeepSeekMessage `json:"messages"`
+}
+
 type DeepSeekResponse struct {
 	Choices []struct {
 		Message struct {
@@ -68,7 +72,6 @@ func handlePrompt(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Received prompt: %s\n", req.Prompt)
 
-	// Интеграция с DeepSeek API
 	deepSeekResponse, err := callDeepSeekAPI(req.Prompt)
 	if err != nil {
 		log.Printf("DeepSeek API error: %v\n", err)
@@ -76,7 +79,6 @@ func handlePrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Формируем ответ
 	resp := PromptResponse{Response: deepSeekResponse}
 	jsonResp, err := json.Marshal(resp)
 	if err != nil {
@@ -92,16 +94,20 @@ func handlePrompt(w http.ResponseWriter, r *http.Request) {
 }
 
 func callDeepSeekAPI(prompt string) (string, error) {
-	// Получаем API ключ из переменных окружения
 	apiKey := os.Getenv("DEEPSEEK_API_KEY")
 	if apiKey == "" {
 		return "", fmt.Errorf("DEEPSEEK_API_KEY environment variable not set")
 	}
 
-	// Формируем запрос к DeepSeek API
+	// Правильный формат запроса для DeepSeek API
 	deepSeekReq := DeepSeekRequest{
-		Model:  "deepseek-chat", // Укажите нужную модель
-		Prompt: prompt,
+		Model: "deepseek-chat",
+		Messages: []DeepSeekMessage{
+			{
+				Role:    "user",
+				Content: prompt,
+			},
+		},
 	}
 
 	requestBody, err := json.Marshal(deepSeekReq)
@@ -109,8 +115,11 @@ func callDeepSeekAPI(prompt string) (string, error) {
 		return "", fmt.Errorf("error marshaling DeepSeek request: %v", err)
 	}
 
-	// Создаем HTTP запрос
-	req, err := http.NewRequest("POST", "https://api.deepseek.com/v1/chat/completions", bytes.NewBuffer(requestBody))
+	req, err := http.NewRequest(
+		"POST",
+		"https://api.deepseek.com/v1/chat/completions",
+		bytes.NewBuffer(requestBody),
+	)
 	if err != nil {
 		return "", fmt.Errorf("error creating request: %v", err)
 	}
@@ -118,7 +127,6 @@ func callDeepSeekAPI(prompt string) (string, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	// Отправляем запрос
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -126,7 +134,6 @@ func callDeepSeekAPI(prompt string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	// Читаем ответ
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("error reading response body: %v", err)
@@ -136,14 +143,12 @@ func callDeepSeekAPI(prompt string) (string, error) {
 		return "", fmt.Errorf("DeepSeek API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Парсим ответ
 	var deepSeekResp DeepSeekResponse
 	err = json.Unmarshal(body, &deepSeekResp)
 	if err != nil {
 		return "", fmt.Errorf("error parsing DeepSeek response: %v", err)
 	}
 
-	// Извлекаем текст ответа
 	if len(deepSeekResp.Choices) == 0 {
 		return "", fmt.Errorf("no choices in DeepSeek response")
 	}

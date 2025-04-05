@@ -1,13 +1,13 @@
 version: '3.8'
 
 services:
-  proxy-dipsy:
+  deepseek-proxy:
     build: .
     ports:
       - "3232:3232"
     environment:
-      - PORT=8080
+      - PORT=3232
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
     restart: unless-stopped
     volumes:
       - ./:/app
-    command: sh -c "go build -o /proxy-dipsy && /proxy-dipsy"
